@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07110f">
+  <title>YahavMail — Real Mailbox</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <header>
+    <a class="brand" href="./"><span class="mark">&gt;_</span><b>Yahav<span>Mail</span></b></a>
+    <span id="status" class="status">● בודק שרת...</span>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="eyebrow">REAL MAILBOX</div>
+      <h1>אימייל אמיתי.<br><span>שנשאר שלך.</span></h1>
+      <p>צור חשבון קבוע על הדומיין שלך, התחבר שוב בעתיד וקבל הודעות אמיתיות ל-Inbox.</p>
+    </section>
+
+    <section id="authCard" class="card auth-card">
+      <div class="tabs">
+        <button id="registerTab" class="tab active">הרשמה</button>
+        <button id="loginTab" class="tab">התחברות</button>
+      </div>
+
+      <form id="authForm">
+        <label>
+          <span>שם משתמש</span>
+          <div class="mail-input" dir="ltr">
+            <input id="username" autocomplete="username" minlength="3" maxlength="30" placeholder="yahav" required>
+            <span id="domainSuffix">@yourdomain.com</span>
+          </div>
+        </label>
+
+        <label>
+          <span>סיסמה</span>
+          <input id="password" type="password" autocomplete="current-password" minlength="8" maxlength="128"
+                 placeholder="לפחות 8 תווים" required>
+        </label>
+
+        <button id="submitBtn" class="primary" type="submit">צור חשבון</button>
+        <div id="authMsg" class="msg"></div>
+      </form>
+
+      <p class="small">
+        החשבון נשמר במסד הנתונים שלך. זו לא כתובת זמנית שמתאפסת אחרי כמה דקות.
+      </p>
+    </section>
+
+    <section id="mailApp" class="app hidden">
+      <div class="top-card card">
+        <div>
+          <span class="tiny">הכתובת שלך</span>
+          <div id="myAddress" class="address" dir="ltr"></div>
+        </div>
+        <div class="actions">
+          <button id="copyBtn">העתק</button>
+          <button id="refreshBtn">↻ רענן</button>
+          <button id="logoutBtn" class="danger">התנתק</button>
+        </div>
+      </div>
+
+      <div class="workspace">
+        <aside class="card inbox">
+          <div class="panel-head">
+            <div>
+              <b>Inbox</b>
+              <small id="mailMeta">0 הודעות</small>
+            </div>
+            <span id="countBadge" class="badge">0</span>
+          </div>
+          <div id="emptyInbox" class="empty">
+            <div>✉</div>
+            <b>אין הודעות עדיין</b>
+            <span>מיילים שיישלחו לכתובת שלך יופיעו כאן.</span>
+          </div>
+          <div id="messageList"></div>
+        </aside>
+
+        <article class="card reader">
+          <div id="emptyReader" class="empty reader-empty">
+            <div class="terminal" dir="ltr">$ waiting_for_mail_</div>
+            <b>בחר הודעה לקריאה</b>
+            <span>HTML חיצוני לא נטען, כדי לצמצם trackers.</span>
+          </div>
+
+          <div id="readerContent" class="hidden">
+            <div class="reader-toolbar">
+              <button id="closeReader">← חזרה</button>
+              <button id="deleteMessage" class="danger">מחק הודעה</button>
+            </div>
+            <div class="reader-header">
+              <h2 id="subject"></h2>
+              <div class="from-line">
+                <div id="avatar" class="avatar">?</div>
+                <div>
+                  <b id="fromName"></b>
+                  <small id="fromAddress" dir="ltr"></small>
+                </div>
+                <time id="receivedAt"></time>
+              </div>
+            </div>
+            <div id="codeBox" class="code-box hidden">
+              <div><small>קוד שזוהה</small><strong id="codeValue" dir="ltr"></strong></div>
+              <button id="copyCode">העתק קוד</button>
+            </div>
+            <pre id="bodyText" class="mail-body"></pre>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <footer>
+    <span>YahavMail</span>
+    <span>Inbox backend: Cloudflare Worker + D1 + Email Routing</span>
+  </footer>
+
+  <script src="./config.js"></script>
+  <script src="./app.js" defer></script>
+</body>
+</html>

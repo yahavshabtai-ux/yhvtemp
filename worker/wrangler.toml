@@ -1,0 +1,19 @@
+name = "yahavmail-api"
+main = "src/worker.js"
+compatibility_date = "2026-09-18"
+
+[vars]
+# Your real mail domain. Example: mail.example.com or example.com
+MAIL_DOMAIN = "REPLACE_WITH_YOUR_DOMAIN"
+
+# Exact GitHub Pages origin only, no trailing slash.
+# Example: https://USERNAME.github.io
+FRONTEND_ORIGIN = "https://REPLACE-WITH-YOUR-GITHUB-USERNAME.github.io"
+
+# Replace this with a long random value before deployment.
+RATE_LIMIT_SALT = "CHANGE_ME_TO_A_LONG_RANDOM_SECRET"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "yahavmail"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"

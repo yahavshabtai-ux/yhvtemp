@@ -1,0 +1,17 @@
+YahavMail quick start
+
+1. You need a domain you own.
+2. Put its DNS on Cloudflare.
+3. Cloudflare -> Email Service -> Email Routing -> Onboard Domain.
+4. Open terminal in /worker:
+   npm install
+   npx wrangler login
+   npx wrangler d1 create yahavmail
+5. Paste the returned database_id into wrangler.toml.
+6. Edit MAIL_DOMAIN, FRONTEND_ORIGIN and RATE_LIMIT_SALT in wrangler.toml.
+7. Run:
+   npx wrangler d1 execute yahavmail --remote --file=./schema.sql
+   npx wrangler deploy
+8. Cloudflare Email Routing -> Catch-all -> send to yahavmail-api Worker.
+9. Put the Worker URL into frontend/config.js.
+10. Upload /frontend to GitHub Pages.
