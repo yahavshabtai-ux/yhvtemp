@@ -1,6 +1,6 @@
-const API = "https://api.mail.tm";
-const POLL_MS = 7000;
-const STORAGE_KEY = "yahavtemp_session_v1";
+const API = "https://api.tempmailportal.com";
+const POLL_MS = 9000;
+const STORAGE_KEY = "yahavtemp_session_v2";
 
 const els = {
   apiStatus: document.querySelector("#apiStatus"),
@@ -28,7 +28,7 @@ const els = {
   verificationBox: document.querySelector("#verificationBox"),
   verificationCode: document.querySelector("#verificationCode"),
   copyCodeBtn: document.querySelector("#copyCodeBtn"),
-  deleteMessageBtn: document.querySelector("#deleteMessageBtn"),
+  closeMessageBtn: document.querySelector("#closeMessageBtn"),
   backBtn: document.querySelector("#backBtn"),
   themeBtn: document.querySelector("#themeBtn"),
   toast: document.querySelector("#toast"),
@@ -36,9 +36,7 @@ const els = {
 
 let state = {
   domain: "",
-  accountId: "",
   address: "",
-  password: "",
   token: "",
   messages: [],
   selectedMessageId: "",
@@ -68,13 +66,6 @@ function setBusy(busy) {
   else els.refreshIcon.classList.remove("spin");
 }
 
-function randomString(length = 14) {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  const bytes = new Uint32Array(length);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, n => chars[n % chars.length]).join("");
-}
-
 function normalizeUsername(value) {
   return value
     .trim()
@@ -84,16 +75,10 @@ function normalizeUsername(value) {
     .slice(0, 30);
 }
 
-function randomUsername() {
-  return `temp${Date.now().toString(36)}${randomString(5)}`;
-}
-
 function saveSession() {
-  if (!state.accountId || !state.address || !state.password) return;
+  if (!state.address || !state.token) return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
-    accountId: state.accountId,
     address: state.address,
-    password: state.password,
     token: state.token,
     domain: state.domain,
   }));
@@ -101,10 +86,12 @@ function saveSession() {
 
 function clearSession() {
   localStorage.removeItem(STORAGE_KEY);
+  // Also remove old Mail.tm session from the first build.
+  localStorage.removeItem("yahavtemp_session_v1");
 }
 
 function updateMailboxUI() {
-  const active = Boolean(state.address);
+  const active = Boolean(state.address && state.token);
   els.emailAddress.textContent = active ? state.address : "לא נוצרה תיבה";
   els.copyBtn.disabled = !active;
   els.refreshBtn.disabled = !active;
@@ -112,60 +99,59 @@ function updateMailboxUI() {
   els.mailboxBadge.textContent = active ? "LIVE" : "OFFLINE";
   els.mailboxBadge.classList.toggle("live", active);
   els.inboxMeta.textContent = active
-    ? "מתרענן אוטומטית כל 7 שניות"
+    ? "מתרענן אוטומטית כל 9 שניות"
     : "צור תיבה כדי להתחיל";
 }
 
-async function apiFetch(path, options = {}, retry = true) {
+async function fetchJSON(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  if (state.token) headers.set("Authorization", `Bearer ${state.token}`);
-
-  const response = await fetch(`${API}${path}`, { ...options, headers });
-
-  if (response.status === 401 && retry && state.address && state.password) {
-    const refreshed = await authenticate();
-    if (refreshed) return apiFetch(path, options, false);
+  if (state.token) {
+    headers.set("Authorization", `Bearer ${state.token}`);
   }
 
-  return response;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(`${API}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+      cache: "no-store",
+    });
+
+    let data = null;
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      data = await response.json().catch(() => null);
+    }
+
+    if (!response.ok) {
+      const msg = data?.error || `HTTP ${response.status}`;
+      const err = new Error(msg);
+      err.status = response.status;
+      throw err;
+    }
+
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function getDomains() {
-  const response = await fetch(`${API}/domains?page=1`);
-  if (!response.ok) throw new Error(`Domains error: ${response.status}`);
+  const domains = await fetchJSON("/api/domains");
+  if (!Array.isArray(domains) || !domains.length) {
+    throw new Error("לא נמצאו דומיינים זמינים כרגע.");
+  }
 
-  const data = await response.json();
-  const domains = (data["hydra:member"] || [])
-    .filter(d => d.isActive !== false)
-    .map(d => d.domain)
-    .filter(Boolean);
-
-  if (!domains.length) throw new Error("No active domains");
   state.domain = domains[0];
   els.domainPreview.textContent = `@${state.domain}`;
   setApiStatus(true, "Mail API מחובר");
   return domains;
-}
-
-async function authenticate() {
-  try {
-    const response = await fetch(`${API}/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address: state.address, password: state.password }),
-    });
-
-    if (!response.ok) return false;
-    const data = await response.json();
-    state.token = data.token || "";
-    saveSession();
-    return Boolean(state.token);
-  } catch {
-    return false;
-  }
 }
 
 async function createMailbox() {
@@ -175,65 +161,48 @@ async function createMailbox() {
   try {
     if (!state.domain) await getDomains();
 
-    let username = normalizeUsername(els.customUsername.value) || randomUsername();
-    if (username.length < 3) {
-      toast("השם חייב להיות לפחות 3 תווים באנגלית/מספרים.", "error");
-      return;
+    const typed = els.customUsername.value.trim();
+    const username = normalizeUsername(typed);
+
+    if (typed && username.length < 3) {
+      throw new Error("השם חייב להיות לפחות 3 תווים באנגלית/מספרים.");
     }
 
-    const password = `${randomString(16)}A9!`;
-    let address = `${username}@${state.domain}`;
+    const body = { domain: state.domain };
+    if (username) body.login = username;
 
-    let response = await fetch(`${API}/accounts`, {
+    // The API returns { address, token }
+    const mailbox = await fetchJSON("/api/inbox", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address, password }),
+      body: JSON.stringify(body),
     });
 
-    // If a custom/random address is already taken, retry only when the user did not request a fixed username.
-    if (!response.ok && !els.customUsername.value.trim()) {
-      username = randomUsername();
-      address = `${username}@${state.domain}`;
-      response = await fetch(`${API}/accounts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address, password }),
-      });
+    if (!mailbox?.address || !mailbox?.token) {
+      throw new Error("השרת לא החזיר תיבת מייל תקינה.");
     }
-
-    if (!response.ok) {
-      let detail = "";
-      try { detail = (await response.json())?.detail || ""; } catch {}
-      if (response.status === 422) {
-        throw new Error(detail || "השם הזה לא זמין. נסה שם אחר.");
-      }
-      throw new Error(detail || `לא ניתן ליצור תיבה (${response.status})`);
-    }
-
-    const account = await response.json();
 
     stopPolling();
-    state.accountId = account.id;
-    state.address = address;
-    state.password = password;
-    state.token = "";
+    state.address = mailbox.address;
+    state.token = mailbox.token;
     state.messages = [];
     state.selectedMessageId = "";
-
-    const authed = await authenticate();
-    if (!authed) throw new Error("התיבה נוצרה אך לא הצלחתי להתחבר אליה.");
 
     saveSession();
     els.customUsername.value = "";
     updateMailboxUI();
     renderMessages([]);
     resetReader();
+
     startPolling();
     await refreshInbox(true);
     toast("התיבה נוצרה ✓");
   } catch (error) {
     console.error(error);
-    toast(error.message || "משהו השתבש ביצירת התיבה.", "error");
+    if (error.name === "AbortError") {
+      toast("השרת לא הגיב בזמן. נסה שוב.", "error");
+    } else {
+      toast(error.message || "משהו השתבש ביצירת התיבה.", "error");
+    }
   } finally {
     setBusy(false);
   }
@@ -244,11 +213,11 @@ async function refreshInbox(silent = false) {
   if (!silent) setBusy(true);
 
   try {
-    const response = await apiFetch("/messages?page=1");
-    if (!response.ok) throw new Error(`Inbox error: ${response.status}`);
+    const nextMessages = await fetchJSON("/api/messages");
 
-    const data = await response.json();
-    const nextMessages = data["hydra:member"] || [];
+    if (!Array.isArray(nextMessages)) {
+      throw new Error("תגובה לא תקינה מה-Inbox.");
+    }
 
     const previousIds = new Set(state.messages.map(m => m.id));
     const newCount = nextMessages.filter(m => !previousIds.has(m.id)).length;
@@ -263,8 +232,20 @@ async function refreshInbox(silent = false) {
     setApiStatus(true, "Mail API מחובר");
   } catch (error) {
     console.error(error);
+    if (error.status === 401) {
+      stopPolling();
+      clearSession();
+      state.address = "";
+      state.token = "";
+      state.messages = [];
+      updateMailboxUI();
+      renderMessages([]);
+      resetReader();
+      toast("התיבה כבר לא זמינה. צור תיבה חדשה.", "error");
+    } else if (!silent) {
+      toast("לא הצלחתי לרענן את ה-Inbox.", "error");
+    }
     setApiStatus(false, "שגיאת חיבור");
-    if (!silent) toast("לא הצלחתי לרענן את ה-Inbox.", "error");
   } finally {
     if (!silent) setBusy(false);
   }
@@ -278,19 +259,19 @@ function renderMessages(messages) {
   for (const message of messages) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `message-card ${message.seen ? "" : "unseen"} ${message.id === state.selectedMessageId ? "active" : ""}`;
+    button.className = `message-card ${message.id === state.selectedMessageId ? "active" : ""}`;
     button.dataset.id = message.id;
 
     const avatar = document.createElement("div");
     avatar.className = "message-avatar";
-    avatar.textContent = initials(message.from?.name || message.from?.address || "?");
+    avatar.textContent = initials(message.fromName || message.from || "?");
 
     const main = document.createElement("div");
     main.className = "message-main";
 
     const from = document.createElement("div");
     from.className = "message-from";
-    from.textContent = message.from?.name || message.from?.address || "Unknown sender";
+    from.textContent = message.fromName || message.from || "Unknown sender";
 
     const subject = document.createElement("div");
     subject.className = "message-subject";
@@ -304,7 +285,7 @@ function renderMessages(messages) {
 
     const time = document.createElement("div");
     time.className = "message-time";
-    time.textContent = formatShortDate(message.createdAt);
+    time.textContent = formatShortDate(message.date);
 
     button.append(avatar, main, time);
     button.addEventListener("click", () => openMessage(message.id));
@@ -317,23 +298,20 @@ async function openMessage(id) {
   renderMessages(state.messages);
 
   try {
-    const response = await apiFetch(`/messages/${encodeURIComponent(id)}`);
-    if (!response.ok) throw new Error(`Message error: ${response.status}`);
-
-    const message = await response.json();
+    const message = await fetchJSON(`/api/messages/${encodeURIComponent(id)}`);
 
     els.readerEmpty.classList.add("hidden");
     els.readerContent.classList.remove("hidden");
-    els.messageSubject.textContent = message.subject || "(ללא נושא)";
-    els.messageSender.textContent = message.from?.name || "שולח";
-    els.messageSenderAddress.textContent = message.from?.address || "";
-    els.senderAvatar.textContent = initials(message.from?.name || message.from?.address || "?");
-    els.messageDate.textContent = formatLongDate(message.createdAt);
+    els.messageSubject.textContent = message?.subject || "(ללא נושא)";
+    els.messageSender.textContent = message?.fromName || "שולח";
+    els.messageSenderAddress.textContent = message?.from || "";
+    els.senderAvatar.textContent = initials(message?.fromName || message?.from || "?");
+    els.messageDate.textContent = formatLongDate(message?.date);
 
-    const safeText = getSafeText(message);
+    const safeText = getSafeText(message || {});
     els.messageBody.textContent = safeText || "להודעה הזו אין תוכן טקסטואלי להצגה.";
 
-    const code = findVerificationCode(message, safeText);
+    const code = findVerificationCode(message || {}, safeText);
     if (code) {
       els.verificationCode.textContent = code;
       els.verificationBox.classList.remove("hidden");
@@ -341,16 +319,6 @@ async function openMessage(id) {
       els.verificationCode.textContent = "";
       els.verificationBox.classList.add("hidden");
     }
-
-    const cached = state.messages.find(m => m.id === id);
-    if (cached) cached.seen = true;
-    renderMessages(state.messages);
-
-    // Best-effort mark as read.
-    apiFetch(`/messages/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      body: JSON.stringify({ seen: true }),
-    }).catch(() => {});
   } catch (error) {
     console.error(error);
     toast("לא הצלחתי לפתוח את ההודעה.", "error");
@@ -362,70 +330,46 @@ function getSafeText(message) {
     return message.text.trim();
   }
 
-  const htmlParts = Array.isArray(message.html) ? message.html : [];
-  if (htmlParts.length) {
+  if (typeof message.html === "string" && message.html.trim()) {
     const parser = new DOMParser();
-    const doc = parser.parseFromString(htmlParts.join("\n"), "text/html");
-    doc.querySelectorAll("script, style, iframe, object, embed, form, noscript").forEach(el => el.remove());
-    return (doc.body?.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
+    const doc = parser.parseFromString(message.html, "text/html");
+    doc.querySelectorAll("script, style, iframe, object, embed, form, noscript, img").forEach(el => el.remove());
+    return (doc.body?.textContent || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   }
 
   return "";
 }
 
 function findVerificationCode(message, safeText) {
-  if (Array.isArray(message.verifications) && message.verifications.length) {
-    const raw = String(message.verifications[0]);
-    const match = raw.match(/\b[A-Z0-9-]{4,10}\b/i);
-    if (match) return match[0];
-  }
+  const combined = `${message.subject || ""}\n${message.intro || ""}\n${safeText || ""}`;
 
-  const combined = `${message.subject || ""}\n${safeText || ""}`;
-  const labeled = combined.match(/(?:code|otp|verification|verify|קוד|אימות)\D{0,25}([A-Z0-9]{4,8})\b/i);
+  const labeled = combined.match(
+    /(?:code|otp|verification|verify|passcode|קוד|אימות)\D{0,30}([A-Z0-9]{4,8})\b/i
+  );
   if (labeled) return labeled[1];
 
   const numeric = combined.match(/\b(\d{4,8})\b/);
   return numeric ? numeric[1] : "";
 }
 
-async function deleteSelectedMessage() {
-  const id = state.selectedMessageId;
-  if (!id) return;
-
-  try {
-    const response = await apiFetch(`/messages/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (!response.ok && response.status !== 204) throw new Error(`Delete message: ${response.status}`);
-
-    state.messages = state.messages.filter(m => m.id !== id);
-    state.selectedMessageId = "";
-    renderMessages(state.messages);
-    resetReader();
-    toast("ההודעה נמחקה");
-  } catch (error) {
-    console.error(error);
-    toast("לא הצלחתי למחוק את ההודעה.", "error");
-  }
-}
-
 async function deleteMailbox() {
-  if (!state.accountId || !state.token) return;
+  if (!state.token) return;
 
-  const okay = confirm("למחוק את התיבה לצמיתות? אי אפשר לשחזר אותה.");
+  const okay = confirm("למחוק את כל ההודעות ולסגור את התיבה בדפדפן הזה?");
   if (!okay) return;
 
   try {
-    const response = await apiFetch(`/accounts/${encodeURIComponent(state.accountId)}`, { method: "DELETE" });
-    if (!response.ok && response.status !== 204) throw new Error(`Delete account: ${response.status}`);
+    await fetchJSON("/api/inbox", { method: "DELETE" });
   } catch (error) {
-    console.warn(error);
-    // Clear local session anyway only after explicit user confirmation.
+    console.warn("Remote delete failed:", error);
   }
 
   stopPolling();
   clearSession();
-  state.accountId = "";
   state.address = "";
-  state.password = "";
   state.token = "";
   state.messages = [];
   state.selectedMessageId = "";
@@ -433,14 +377,16 @@ async function deleteMailbox() {
   updateMailboxUI();
   renderMessages([]);
   resetReader();
-  toast("התיבה נמחקה");
+  toast("התיבה נוקתה");
 }
 
 function resetReader() {
+  state.selectedMessageId = "";
   els.readerContent.classList.add("hidden");
   els.readerEmpty.classList.remove("hidden");
   els.messageBody.textContent = "";
   els.verificationBox.classList.add("hidden");
+  renderMessages(state.messages);
 }
 
 function startPolling() {
@@ -464,24 +410,36 @@ function initials(value) {
 function formatShortDate(dateString) {
   if (!dateString) return "";
   const d = new Date(dateString);
-  const now = new Date();
+  if (Number.isNaN(d.getTime())) return "";
 
+  const now = new Date();
   if (d.toDateString() === now.toDateString()) {
-    return new Intl.DateTimeFormat("he-IL", { hour: "2-digit", minute: "2-digit" }).format(d);
+    return new Intl.DateTimeFormat("he-IL", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(d);
   }
-  return new Intl.DateTimeFormat("he-IL", { day: "2-digit", month: "2-digit" }).format(d);
+
+  return new Intl.DateTimeFormat("he-IL", {
+    day: "2-digit",
+    month: "2-digit",
+  }).format(d);
 }
 
 function formatLongDate(dateString) {
   if (!dateString) return "";
+  const d = new Date(dateString);
+  if (Number.isNaN(d.getTime())) return "";
+
   return new Intl.DateTimeFormat("he-IL", {
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(new Date(dateString));
+  }).format(d);
 }
 
 async function copyText(text, successMessage = "הועתק ✓") {
   if (!text) return;
+
   try {
     await navigator.clipboard.writeText(text);
   } catch {
@@ -494,6 +452,7 @@ async function copyText(text, successMessage = "הועתק ✓") {
     document.execCommand("copy");
     area.remove();
   }
+
   toast(successMessage);
 }
 
@@ -503,48 +462,41 @@ async function restoreSession() {
 
   try {
     const saved = JSON.parse(raw);
-    if (!saved.address || !saved.password || !saved.accountId) return false;
+    if (!saved.address || !saved.token) return false;
 
-    state.accountId = saved.accountId;
     state.address = saved.address;
-    state.password = saved.password;
-    state.token = saved.token || "";
+    state.token = saved.token;
     state.domain = saved.domain || (saved.address.split("@")[1] || "");
 
-    if (state.domain) els.domainPreview.textContent = `@${state.domain}`;
-
-    // Validate or re-authenticate.
-    if (!state.token || !(await validateSession())) {
-      const ok = await authenticate();
-      if (!ok) throw new Error("Session expired");
+    if (state.domain) {
+      els.domainPreview.textContent = `@${state.domain}`;
     }
 
     updateMailboxUI();
-    startPolling();
-    await refreshInbox(true);
-    return true;
-  } catch {
-    clearSession();
-    state.accountId = "";
-    state.address = "";
-    state.password = "";
-    state.token = "";
-    return false;
-  }
-}
 
-async function validateSession() {
-  try {
-    const response = await apiFetch("/me", {}, false);
-    return response.ok;
-  } catch {
+    // A successful inbox fetch also validates the saved token.
+    await refreshInbox(true);
+
+    if (!state.address || !state.token) return false;
+
+    startPolling();
+    return true;
+  } catch (error) {
+    console.warn("Could not restore session:", error);
+    clearSession();
+    state.address = "";
+    state.token = "";
+    state.messages = [];
     return false;
   }
 }
 
 function toggleTheme() {
   document.documentElement.classList.toggle("light");
-  localStorage.setItem("yahavtemp_theme", document.documentElement.classList.contains("light") ? "light" : "dark");
+  localStorage.setItem(
+    "yahavtemp_theme",
+    document.documentElement.classList.contains("light") ? "light" : "dark"
+  );
 }
 
 function loadTheme() {
@@ -556,20 +508,18 @@ els.createBtn.addEventListener("click", createMailbox);
 els.copyBtn.addEventListener("click", () => copyText(state.address, "האימייל הועתק ✓"));
 els.refreshBtn.addEventListener("click", () => refreshInbox(false));
 els.deleteAccountBtn.addEventListener("click", deleteMailbox);
-els.deleteMessageBtn.addEventListener("click", deleteSelectedMessage);
 els.copyCodeBtn.addEventListener("click", () => copyText(els.verificationCode.textContent, "הקוד הועתק ✓"));
-els.backBtn.addEventListener("click", () => {
-  state.selectedMessageId = "";
-  renderMessages(state.messages);
-  resetReader();
-});
+els.closeMessageBtn?.addEventListener("click", resetReader);
+els.backBtn.addEventListener("click", resetReader);
 els.themeBtn.addEventListener("click", toggleTheme);
+
 els.customUsername.addEventListener("input", () => {
   const normalized = normalizeUsername(els.customUsername.value);
   if (els.customUsername.value !== normalized) els.customUsername.value = normalized;
 });
-els.customUsername.addEventListener("keydown", e => {
-  if (e.key === "Enter") createMailbox();
+
+els.customUsername.addEventListener("keydown", event => {
+  if (event.key === "Enter") createMailbox();
 });
 
 window.addEventListener("beforeunload", stopPolling);
@@ -583,7 +533,12 @@ window.addEventListener("beforeunload", stopPolling);
   } catch (error) {
     console.error(error);
     setApiStatus(false, "API לא זמין כרגע");
-    toast("לא הצלחתי להתחבר לשירות המייל.", "error");
+    toast(
+      error.name === "AbortError"
+        ? "השרת לא הגיב בזמן."
+        : "לא הצלחתי להתחבר לשירות המייל.",
+      "error"
+    );
   }
 
   const restored = await restoreSession();

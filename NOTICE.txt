@@ -1,7 +1,3 @@
-YahavTemp project files are provided for personal and development use.
-
-Third-party email infrastructure is provided by Mail.tm and remains subject
-to Mail.tm's own terms and policies.
-
-Do not use this project for spam, abuse, illegal activity, or automated
-account farming.
+YahavTemp GitHub Pages build.
+Temporary-mail infrastructure is provided by TempMailPortal.
+Use only for legitimate privacy, development and testing purposes.

@@ -1,73 +1,33 @@
-# YahavTemp
+# YahavTemp — GitHub Pages build
 
-אתר Temporary Email סטטי שאפשר להעלות ישירות ל-GitHub Pages.
+גרסה מתוקנת שעובדת מאתר סטטי ב-GitHub Pages.
 
-## מה יש בפנים
+## תיקון מרכזי
 
-- יצירת כתובת אימייל זמנית אמיתית
-- אפשרות לבחור username
-- Inbox שמתעדכן אוטומטית כל 7 שניות
-- פתיחת הודעות
-- זיהוי בסיסי של קודי אימות
-- העתקת כתובת וקוד
-- מחיקת הודעה
-- מחיקת תיבה
-- שמירת session מקומית בדפדפן
-- Dark / Light mode
-- Preview טקסטואלי בטוח שלא טוען HTML חיצוני/trackers
+הגרסה הקודמת השתמשה ב-Mail.tm ישירות מהדפדפן. במצבים שבהם ה-API
+לא מחזיר CORS מתאים, Chrome חוסם את הבקשה ומציג `Failed to fetch`.
 
-## איך מריצים במחשב
+הגרסה הזו משתמשת ב-TempMailPortal API, שמצהיר על CORS פתוח ומיועד
+לקריאות ישירות מ-JavaScript בדפדפן.
 
-אפשר פשוט לפתוח `index.html` בדפדפן.
+## קבצים להעלאה
 
-אם הדפדפן מגביל בקשות מקובץ מקומי, הרץ שרת מקומי:
+החלף ב-Repository את:
 
-```bash
-py -m http.server 8000
-```
+- `index.html`
+- `style.css`
+- `app.js`
 
-ואז פתח:
+לא צריך Python, Render, Node.js או Backend.
 
-```text
-http://localhost:8000
-```
+## אחרי העלאה
 
-## העלאה ל-GitHub Pages
-
-1. צור Repository חדש ב-GitHub.
-2. העלה אליו את `index.html`, `style.css` ו-`app.js`.
-3. היכנס ל-Settings > Pages.
-4. תחת Build and deployment בחר Deploy from a branch.
-5. בחר `main` ואת `/ (root)`.
-6. שמור.
-
-אחרי כמה רגעים האתר יהיה זמין בכתובת GitHub Pages של ה-Repository.
-
-## איך זה עובד
-
-האתר משתמש ישירות ב-Mail.tm API:
-- `GET /domains`
-- `POST /accounts`
-- `POST /token`
-- `GET /messages`
-- `GET /messages/{id}`
-- `DELETE /messages/{id}`
-- `DELETE /accounts/{id}`
-
-אין API key ואין backend בפרויקט הזה.
-
-## פרטיות ואבטחה
-
-פרטי התיבה הזמנית (כולל token/password של התיבה הזמנית) נשמרים רק ב-localStorage של הדפדפן כדי שהתיבה תישאר זמינה אחרי refresh.
-
-תצוגת ההודעות מציגה טקסט בלבד. היא לא מרנדרת את ה-HTML המקורי של המייל, כדי לצמצם טעינת משאבים חיצוניים ו-tracking pixels.
+GitHub Pages עשוי לקחת כמה רגעים להתעדכן. לאחר מכן:
+- בצע Ctrl+F5
+- ואם עדיין נטענת הגרסה הישנה, פתח DevTools > Application > Storage
+  ונקה Site Data, או פתח חלון Incognito.
 
 ## שימוש
 
-מיועד לפרטיות, בדיקות ופיתוח. אל תשתמש בשירות לפעילות בלתי חוקית, ספאם או עקיפה של מגבלות שירותים.
-
-## Attribution
-
-Email infrastructure powered by [Mail.tm](https://mail.tm/).
-
-Mail.tm requires visible attribution when using its API.
+מיועד לפרטיות, בדיקות ופיתוח לגיטימיים. אין להשתמש בו לספאם,
+הונאה, עקיפת מגבלות או יצירת חשבונות אוטומטית בשירותי צד שלישי.
