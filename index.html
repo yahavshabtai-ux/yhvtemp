@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#07110f" />
+  <meta name="description" content="YahavTemp — Temporary email inbox powered by Mail.tm" />
+  <title>YahavTemp — Temporary Email</title>
+  <link rel="preconnect" href="https://api.mail.tm" crossorigin>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+
+<body>
+  <div class="noise"></div>
+  <div class="orb orb-one"></div>
+  <div class="orb orb-two"></div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="YahavTemp home">
+      <span class="brand-mark">&gt;_</span>
+      <span class="brand-name">Yahav<span>Temp</span></span>
+    </a>
+
+    <div class="top-actions">
+      <span id="apiStatus" class="status-pill">
+        <i></i>
+        <span>בודק חיבור...</span>
+      </span>
+      <button id="themeBtn" class="icon-btn" type="button" aria-label="החלפת תצוגה">◐</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <div class="eyebrow"><span></span> TEMPORARY INBOX</div>
+      <h1>אימייל זמני.<br><em>בלי כאב ראש.</em></h1>
+      <p>
+        צור כתובת זמנית בלחיצה, קבל הודעות בזמן אמת וקרא אותן ישירות מהדפדפן.
+      </p>
+    </section>
+
+    <section class="mail-card glass">
+      <div class="mail-card-top">
+        <div>
+          <div class="label">הכתובת שלך</div>
+          <div id="emailAddress" class="email-address" dir="ltr">לא נוצרה תיבה</div>
+        </div>
+        <div id="mailboxBadge" class="mailbox-badge">OFFLINE</div>
+      </div>
+
+      <div class="action-grid">
+        <button id="createBtn" class="btn btn-primary" type="button">
+          <span class="btn-icon">✦</span>
+          <span>צור אימייל חדש</span>
+        </button>
+
+        <button id="copyBtn" class="btn btn-secondary" type="button" disabled>
+          <span class="btn-icon">⧉</span>
+          <span>העתק</span>
+        </button>
+
+        <button id="refreshBtn" class="btn btn-secondary" type="button" disabled>
+          <span id="refreshIcon" class="btn-icon">↻</span>
+          <span>רענן Inbox</span>
+        </button>
+
+        <button id="deleteAccountBtn" class="btn btn-danger" type="button" disabled>
+          <span class="btn-icon">⌫</span>
+          <span>מחק תיבה</span>
+        </button>
+      </div>
+
+      <div class="custom-row">
+        <div class="custom-copy">
+          <strong>רוצה שם משלך?</strong>
+          <span>אפשר לבקש username; הדומיין נבחר מהדומיינים הזמינים.</span>
+        </div>
+        <div class="custom-input-wrap" dir="ltr">
+          <input id="customUsername" type="text" maxlength="30" autocomplete="off"
+                 placeholder="yourname" aria-label="Custom mailbox username" />
+          <span id="domainPreview">@...</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <aside class="inbox-panel glass">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">Inbox</div>
+            <div id="inboxMeta" class="panel-meta">צור תיבה כדי להתחיל</div>
+          </div>
+          <span id="messageCount" class="count-badge">0</span>
+        </div>
+
+        <div id="inboxEmpty" class="empty-state">
+          <div class="empty-icon">⌁</div>
+          <strong>אין עדיין הודעות</strong>
+          <span>אחרי שתיצור כתובת, הודעות חדשות יופיעו כאן אוטומטית.</span>
+        </div>
+
+        <div id="messageList" class="message-list" aria-live="polite"></div>
+      </aside>
+
+      <article class="reader-panel glass">
+        <div id="readerEmpty" class="reader-empty">
+          <div class="terminal-art">
+            <span>$</span> waiting_for_mail<span class="cursor">_</span>
+          </div>
+          <h2>בחר הודעה לקריאה</h2>
+          <p>התוכן יוצג כאן כטקסט בטוח, בלי לטעון trackers חיצוניים מתוך המייל.</p>
+        </div>
+
+        <div id="readerContent" class="reader-content hidden">
+          <div class="reader-toolbar">
+            <button id="backBtn" class="btn btn-mini" type="button">← חזרה</button>
+            <button id="deleteMessageBtn" class="btn btn-mini danger-text" type="button">מחק הודעה</button>
+          </div>
+
+          <div class="reader-header">
+            <div id="messageSubject" class="reader-subject"></div>
+            <div class="reader-from-line">
+              <div id="senderAvatar" class="sender-avatar">?</div>
+              <div>
+                <div id="messageSender" class="sender-name"></div>
+                <div id="messageSenderAddress" class="sender-address" dir="ltr"></div>
+              </div>
+              <time id="messageDate" class="message-date"></time>
+            </div>
+          </div>
+
+          <div id="verificationBox" class="verification-box hidden">
+            <div>
+              <span class="verification-label">קוד שזוהה</span>
+              <strong id="verificationCode" dir="ltr"></strong>
+            </div>
+            <button id="copyCodeBtn" class="btn btn-mini" type="button">העתק קוד</button>
+          </div>
+
+          <div id="messageBody" class="message-body"></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="info-strip">
+      <div><strong>⚡ אוטומטי</strong><span>בדיקת Inbox כל 7 שניות</span></div>
+      <div><strong>🔒 מקומי</strong><span>פרטי התיבה נשמרים בדפדפן שלך</span></div>
+      <div><strong>🛡 Preview בטוח</strong><span>לא טוען HTML או trackers חיצוניים</span></div>
+    </section>
+  </main>
+
+  <footer>
+    <span>YahavTemp • Temporary inbox UI</span>
+    <span>
+      Email infrastructure by
+      <a href="https://mail.tm/" target="_blank" rel="noopener noreferrer">Mail.tm</a>
+    </span>
+  </footer>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>
